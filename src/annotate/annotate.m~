@@ -1,0 +1,155 @@
+% A tool for annotating pairs
+% Note: when annotating the different pair, the order of annotation matters
+%       first click the shadow one, then the non shadow one
+%       
+addpath('meanshift');
+addpath('used_desc');
+
+load('../cache/traintestfnlist.mat');
+
+for i = 1 : numel(trainfnlist)
+    fprintf('Annotating %d out of %d\n', i, numel(trainfnlist));
+    fn = ['../data/Tappen/img/' trainfnlist{i} '.jpg'];
+    outfn = ['../data/Tappen/annt/annt_' trainfnlist{i} '.mat'];
+    
+    annotated = 0;
+     
+    if exist(outfn, 'file')
+       load(outfn,'im','seg','numlabel','alldiff','allsame','allirre');
+       annotated = 1;
+    end
+    
+    if ~annotated
+       im = imread(fn);
+       im = (double(im)/255);
+    
+       [dummy seg] = edison_wrapper(im, @RGB2Luv, ...
+           'SpatialBandWidth', 9, 'RangeBandWidth', 15, ...
+           'MinimumRegionArea', 200);
+       seg = seg + 1;
+       numlabel = length(unique(seg(:)));
+    end
+
+    % get centers of all segs
+    s = regionprops(seg, 'Centroid');
+    centroids = cat(1,s.Centroid);
+    
+    %[invmean ~]= calcInvMean(gamma_im, seg, numlabel);
+    %rgbmean = calcRGBMean(im, seg, numlabel);
+    %texthist = calcTextonHist(im, seg, numlabel);
+    %labhist = calcLabHist(im, seg, numlabel);
+    %d_text=distHistInt(texthist, texthist);
+    %d_lab =distHistInt(labhist, labhist);
+    
+    a=edge(double(seg)/numlabel,'canny',1e-7);
+    imnew=im;
+    for i=1:3
+        b=im(:,:,i);
+        b(a)=0;
+
+        imnew(:,:,i)=b;
+    end
+    clf,
+    figure(1),
+    imshow(imnew);
+    if ~annotated
+       alldiff = [];
+    end
+    fprintf(1, 'Different\n');
+    
+    hold on
+
+    %visualize existing annotation
+    if annotated
+      for i = 1 : size(alldiff,1)
+        pair = alldiff(i,:);	
+        plot(centroids(pair,1), centroids(pair,2),'b');
+        plot(centroids(pair(1),1), centroids(pair(1),2), 'bo');
+      end
+    end
+ 
+    while 1
+        [x1 y1 b] = ginput(1);
+        if b=='c'
+            break;
+        end
+        if b=='d'
+            alldiff(end,:)=[];
+            continue;
+        end
+        [x2 y2] = ginput(1);
+        x1=int32(x1);x2=int32(x2);y1=int32(y1);y2=int32(y2);
+        plot([x1 x2], [y1 y2], 'b')
+        plot(x1, y1, 'bo');
+        i = seg(y1, x1);
+        j = seg(y2, x2);
+        alldiff = [alldiff; i, j];
+        %fprintf(1, '%d: dtext: %.3f, dlab: %.3f, ratio: %.3f, %.3f, %.3f, %.3f\n',...
+        %    size(alldiff,1), d_text(i,j), d_lab(i,j), rgbmean(i,:)./rgbmean(j,:), invmean(i)/invmean(j));
+    end
+    fprintf(1, 'Same\n');
+    
+    if ~annotated
+      allsame = [];
+    end
+    
+    if annotated
+      for i = 1 : size(allsame,1)
+	pair = allsame(i,:);	
+	plot(centroids(pair,1), centroids(pair,2),'r');
+      end
+    end
+
+    while 1
+        [x1 y1 b] = ginput(1);
+        if b=='c'
+            break;
+        end
+        if b=='d'
+            allsame(end,:)=[];
+            continue;
+        end
+        [x2 y2] = ginput(1);
+        x1=int32(x1);x2=int32(x2);y1=int32(y1);y2=int32(y2);
+        hold on, plot([x1 x2], [y1 y2], 'r');
+        i = seg(y1, x1);
+        j = seg(y2, x2);
+        allsame = [allsame; i, j];
+        %fprintf(1, '%d: dtext: %.3f, dlab: %.3f, ratio: %.3f, %.3f, %.3f, %.3f\n',...
+        %    size(allsame,1), d_text(i,j), d_lab(i,j), rgbmean(i,:)./rgbmean(j,:), invmean(i)/invmean(j));
+    end
+
+    fprintf(1, 'Irrelavent\n');
+   
+    if ~annotated 
+       allirre = [];
+    end
+     
+    if annotated
+      for i = 1 : size(allirre,1)
+	pair = allirre(i,:);	
+	plot(centroids(pair,1), centroids(pair,2),'g');
+      end
+    end
+
+    while 1
+        [x1 y1 b] = ginput(1);
+        if b=='q'
+            break;
+        end
+        if b=='d'
+            allirre(end,:)=[];
+            continue;
+        end
+        [x2 y2] = ginput(1);
+        x1=int32(x1);x2=int32(x2);y1=int32(y1);y2=int32(y2);
+        hold on, plot([x1 x2], [y1 y2], 'g');
+        i = seg(y1, x1);
+        j = seg(y2, x2);
+        allirre = [allirre; i, j];
+        %fprintf(1, '%d: dtext: %.3f, dlab: %.3f, ratio: %.3f, %.3f, %.3f, %.3f\n',...
+        %    size(allirre,1), d_text(i,j), d_lab(i,j), rgbmean(i,:)./rgbmean(j,:), invmean(i)/invmean(j));
+    end
+    fprintf(1, 'saving\n');
+    save(outfn, 'im', 'seg', 'numlabel', 'alldiff', 'allsame', 'allirre');
+end
